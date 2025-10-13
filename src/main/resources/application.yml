@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/hrm
+  jackson:
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
+
+hrm:
+  jwt:
+    secret: 3e8112cd9aa0a41cebc48ab04db1d9f926eb454694ed755957b8510aae5032bf
+    ttlMinutes: 4320
