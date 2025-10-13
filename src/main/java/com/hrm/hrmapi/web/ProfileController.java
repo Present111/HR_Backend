@@ -39,34 +39,42 @@ public class ProfileController {
         }
 
         var res = new LinkedHashMap<String, Object>();
-        res.put("user", Map.of(
-                "id", u.getId(),
-                "email", u.getEmail(),
-                "fullName", u.getFullName(),
-                "role", u.getRole().name(),
-                "avatarUrl", u.getAvatarUrl(),
-                "employeeId", u.getEmployeeId()
-        ));
 
-        res.put("employee", emp == null ? null : Map.of(
-                "id", emp.getId(),
-                "code", emp.getCode(),
-                "fullName", emp.getFullName(),
-                "department", emp.getDepartment(),
-                "position", emp.getPosition(),
-                "status", emp.getStatus(),
-                "joinDate", emp.getJoinDate(),
-                "phone", emp.getPhone(),
-                "address", emp.getAddress(),
-                "emergencyContact", emp.getEmergencyContact()
-        ));
+        // ---- user map (allow nulls) ----
+        var userMap = new LinkedHashMap<String, Object>();
+        userMap.put("id", u.getId());
+        userMap.put("email", u.getEmail());
+        userMap.put("fullName", u.getFullName());
+        userMap.put("role", u.getRole() != null ? u.getRole().name() : null);
+        userMap.put("avatarUrl", u.getAvatarUrl());
+        userMap.put("employeeId", u.getEmployeeId());
+        res.put("user", userMap);
 
-        // Quick summary mock (sprint 1 chưa nối các module khác)
-        res.put("summary", Map.of(
-                "leaveRemaining", 12,                         // mock
-                "assetsInUse", 0,                             // mock
-                "latestPayslipMonth", YearMonth.now().minusMonths(1).toString()
-        ));
+        // ---- employee map (allow nulls) ----
+        if (emp == null) {
+            res.put("employee", null);
+        } else {
+            var empMap = new LinkedHashMap<String, Object>();
+            empMap.put("id", emp.getId());
+            empMap.put("code", emp.getCode());
+            empMap.put("fullName", emp.getFullName());
+            empMap.put("department", emp.getDepartment());
+            empMap.put("position", emp.getPosition());
+            empMap.put("status", emp.getStatus());
+            empMap.put("joinDate", emp.getJoinDate());
+            empMap.put("phone", emp.getPhone());
+            empMap.put("address", emp.getAddress());
+            empMap.put("emergencyContact", emp.getEmergencyContact());
+            res.put("employee", empMap);
+        }
+
+        // ---- quick summary (mock) ----
+        var summary = new LinkedHashMap<String, Object>();
+        summary.put("leaveRemaining", 12);
+        summary.put("assetsInUse", 0);
+        summary.put("latestPayslipMonth", YearMonth.now().minusMonths(1).toString());
+        res.put("summary", summary);
+
         return res;
     }
 

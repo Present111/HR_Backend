@@ -3,6 +3,6 @@ import com.hrm.hrmapi.domain.*;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import java.util.*;
 
-public interface EmployeeRepo extends MongoRepository<Employee, String> {
+public interface EmployeeRepo extends MongoRepository<Employee, String>, EmployeeRepoCustom {
     List<Employee> findByDepartment(String department);
 }

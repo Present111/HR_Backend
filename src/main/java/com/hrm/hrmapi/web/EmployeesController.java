@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -19,23 +20,128 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.PrintWriter;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Tag(name = "Employees")
 @RestController
 @RequestMapping("/employees")
 @RequiredArgsConstructor
 public class EmployeesController {
+
     private final EmployeeRepo employees;
     private final ContractRepo contracts;
 
-    @Operation(summary = "Danh sách nhân viên (ADMIN/MANAGER)")
+    /* ===================== LIST (filter + pagination + sort) ===================== */
+
+    @Operation(summary = "Danh sách nhân viên (filter + pagination)")
     @GetMapping
-    public List<Employee> list() { return employees.findAll(); }
+    public Map<String, Object> list(
+            @Parameter(description = "Tìm theo code/fullName/phone/position/department (contains, ignore case)")
+            @RequestParam(required = false) String search,
+            @Parameter(description = "Lọc theo phòng ban (exact, ignore case)")
+            @RequestParam(required = false) String department,
+            @Parameter(description = "Lọc theo trạng thái (ACTIVE/INACTIVE, exact, ignore case)")
+            @RequestParam(required = false) String status,
+            @Parameter(description = "Trang, bắt đầu từ 0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Kích thước trang") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "VD: fullName,asc | joinDate,desc") @RequestParam(defaultValue = "joinDate,desc") String sort
+    ) {
+        // Lấy toàn bộ & lọc trong bộ nhớ – Sprint 1 cho nhanh
+        List<Employee> all = employees.findAll();
+
+        // filter
+        String q = StringUtils.hasText(search) ? search.trim().toLowerCase() : null;
+        String dept = StringUtils.hasText(department) ? department.trim().toLowerCase() : null;
+        String st = StringUtils.hasText(status) ? status.trim().toLowerCase() : null;
+
+        List<Employee> filtered = all.stream()
+                .filter(e -> {
+                    if (q == null) return true;
+                    return containsIgnoreCase(e.getCode(), q)
+                            || containsIgnoreCase(e.getFullName(), q)
+                            || containsIgnoreCase(e.getPhone(), q)
+                            || containsIgnoreCase(e.getPosition(), q)
+                            || containsIgnoreCase(e.getDepartment(), q);
+                })
+                .filter(e -> dept == null || equalsIgnoreCase(e.getDepartment(), dept))
+                .filter(e -> st == null || equalsIgnoreCase(e.getStatus(), st))
+                .collect(Collectors.toList());
+
+        // sort
+        Comparator<Employee> cmp = buildComparator(sort);
+        if (cmp != null) filtered.sort(cmp);
+
+        // pagination
+        long total = filtered.size();
+        int from = Math.max(0, page * size);
+        int to = Math.min(filtered.size(), from + size);
+        List<Employee> items = from >= to ? Collections.emptyList() : filtered.subList(from, to);
+
+        return Map.of(
+                "items", items,
+                "page", page,
+                "size", size,
+                "total", total
+        );
+    }
+
+    /* ===================== EXPORT CSV ===================== */
+
+    @Operation(summary = "Export danh sách nhân viên (CSV) theo filter hiện tại")
+    @GetMapping("/export")
+    public void exportCsv(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String status,
+            HttpServletResponse resp
+    ) throws Exception {
+        // Tái sử dụng logic filter như trên
+        List<Employee> all = employees.findAll();
+
+        String q = StringUtils.hasText(search) ? search.trim().toLowerCase() : null;
+        String dept = StringUtils.hasText(department) ? department.trim().toLowerCase() : null;
+        String st = StringUtils.hasText(status) ? status.trim().toLowerCase() : null;
+
+        List<Employee> filtered = all.stream()
+                .filter(e -> {
+                    if (q == null) return true;
+                    return containsIgnoreCase(e.getCode(), q)
+                            || containsIgnoreCase(e.getFullName(), q)
+                            || containsIgnoreCase(e.getPhone(), q)
+                            || containsIgnoreCase(e.getPosition(), q)
+                            || containsIgnoreCase(e.getDepartment(), q);
+                })
+                .filter(e -> dept == null || equalsIgnoreCase(e.getDepartment(), dept))
+                .filter(e -> st == null || equalsIgnoreCase(e.getStatus(), st))
+                .collect(Collectors.toList());
+
+        String filename = "employees.csv";
+        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8);
+        resp.setStatus(HttpStatus.OK.value());
+        resp.setContentType("text/csv; charset=UTF-8");
+        resp.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encoded);
+
+        try (PrintWriter w = resp.getWriter()) {
+            w.println("Code,Full Name,Department,Position,Status,Join Date,Phone,Address");
+            for (Employee e : filtered) {
+                w.printf("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"%n",
+                        nz(e.getCode()), nz(e.getFullName()), nz(e.getDepartment()),
+                        nz(e.getPosition()), nz(e.getStatus()),
+                        nz(e.getJoinDate()), nz(e.getPhone()), nz(e.getAddress()));
+            }
+        }
+    }
+
+    /* ===================== DETAIL / CONTRACTS ===================== */
 
     @Operation(summary = "Chi tiết nhân viên; EMPLOYEE chỉ xem hồ sơ của chính mình")
     @GetMapping("/{id}")
@@ -44,7 +150,8 @@ public class EmployeesController {
         if (me.getRole() == User.Role.EMPLOYEE && !id.equals(me.getEmployeeId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
-        return employees.findById(id).orElseThrow();
+        return employees.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
     }
 
     @Operation(summary = "Danh sách hợp đồng theo nhân viên")
@@ -53,7 +160,7 @@ public class EmployeesController {
         return contracts.findByEmployeeIdOrderByVersionDesc(id);
     }
 
-    /* ========= Tạo mới nhân viên (ADMIN/MANAGER) ========= */
+    /* ===================== CREATE ===================== */
 
     public record CreateEmployeeRequest(
             @Schema(example = "NV-2025-0100") @NotBlank @Size(max = 50) String code,
@@ -90,7 +197,7 @@ public class EmployeesController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Employee create(@Valid @RequestBody CreateEmployeeRequest req) {
-        // Có thể kiểm tra trùng code nếu muốn
+        // Kiểm tra trùng code
         employees.findAll().stream()
                 .filter(e -> e.getCode() != null && e.getCode().equalsIgnoreCase(req.code()))
                 .findAny()
@@ -108,5 +215,36 @@ public class EmployeesController {
                 .build();
 
         return employees.save(emp);
+    }
+
+    /* ===================== Helpers ===================== */
+
+    private static boolean containsIgnoreCase(String s, String needleLower) {
+        return s != null && s.toLowerCase().contains(needleLower);
+    }
+
+    private static boolean equalsIgnoreCase(String s, String tLower) {
+        return s != null && s.equalsIgnoreCase(tLower);
+    }
+
+    private static String nz(Object v) { return v == null ? "" : v.toString(); }
+
+    private Comparator<Employee> buildComparator(String sort) {
+        if (!StringUtils.hasText(sort)) return null;
+        String[] parts = sort.split(",");
+        String field = parts[0].trim();
+        boolean desc = parts.length > 1 && "desc".equalsIgnoreCase(parts[1]);
+
+        Comparator<Employee> c;
+        switch (field) {
+            case "code" -> c = Comparator.comparing(Employee::getCode, Comparator.nullsLast(String::compareToIgnoreCase));
+            case "fullName" -> c = Comparator.comparing(Employee::getFullName, Comparator.nullsLast(String::compareToIgnoreCase));
+            case "department" -> c = Comparator.comparing(Employee::getDepartment, Comparator.nullsLast(String::compareToIgnoreCase));
+            case "position" -> c = Comparator.comparing(Employee::getPosition, Comparator.nullsLast(String::compareToIgnoreCase));
+            case "status" -> c = Comparator.comparing(Employee::getStatus, Comparator.nullsLast(String::compareToIgnoreCase));
+            case "joinDate" -> c = Comparator.comparing(Employee::getJoinDate, Comparator.nullsLast(LocalDate::compareTo));
+            default -> c = Comparator.comparing(Employee::getFullName, Comparator.nullsLast(String::compareToIgnoreCase));
+        }
+        return desc ? c.reversed() : c;
     }
 }
