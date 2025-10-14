@@ -2,7 +2,9 @@ package com.hrm.hrmapi.web;
 
 import com.hrm.hrmapi.domain.LeaveQuota;
 import com.hrm.hrmapi.domain.LeaveRequest;
+import com.hrm.hrmapi.domain.LeaveType;
 import com.hrm.hrmapi.domain.User;
+import com.hrm.hrmapi.repo.LeaveTypeRepo;
 import com.hrm.hrmapi.service.LeaveService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -23,6 +25,7 @@ import java.util.List;
 public class LeaveController {
 
     private final LeaveService service;
+    private final LeaveTypeRepo typeRepo;
 
     @Operation(summary = "Xem quota năm của 1 nhân viên")
     @GetMapping("/quota/{employeeId}")
@@ -62,5 +65,9 @@ public class LeaveController {
                                Authentication auth) {
         var me = (User) auth.getPrincipal();
         return service.reject(id, me.getId(), note);
+    }
+    @GetMapping("/leave/types")
+    public List<LeaveType> types() {
+        return typeRepo.findAll();
     }
 }
