@@ -6,6 +6,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import java.util.List;
 
 public interface DocRepo extends MongoRepository<Doc, String> {
-    List<Doc> findByEmployeeId(String employeeId);
-    List<Doc> findByEmployeeIdAndTypeIn(String employeeId, List<String> types);
+    List<Doc> findByEmployeeIdOrderByUploadedAtDesc(String employeeId);
+    List<Doc> findByEmployeeIdAndTypeOrderByUploadedAtDesc(String employeeId, String type);
 }

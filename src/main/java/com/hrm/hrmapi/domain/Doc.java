@@ -7,7 +7,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 
-@Document("docs")
+@Document("documents")
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class Doc {
     @Id private String id;

@@ -217,7 +217,82 @@ public class EmployeesController {
         return employees.save(emp);
     }
 
+    /* ===================== UPDATE INFO (CONTACT) & JOB ===================== */
+
+    // DTO cho Info tab
+    public record UpdateContactReq(
+            String fullName,
+            String phone,
+            String address,
+            Emergency emergency
+    ){
+        public record Emergency(String name, String phone, String relation){}
+    }
+
+    // DTO cho Job tab
+    public record UpdateJobReq(
+            String department,
+            String position,
+            String status,  // ACTIVE/INACTIVE...
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate joinDate,
+            String grade,        // optional nếu sau này có field
+            String contractType  // optional nếu sau này có field
+    ) {}
+
+    @Operation(summary = "Cập nhật thông tin liên hệ + liên hệ khẩn (Info tab)")
+    @PutMapping("/{id}/contact")
+    public Map<String,Object> updateContact(
+            @PathVariable String id,
+            @RequestBody @Valid UpdateContactReq req,
+            Authentication auth
+    ){
+        ensureCanEdit(auth, id);
+        var emp = employees.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+
+        if (req.fullName()!=null && !req.fullName().isBlank()) emp.setFullName(req.fullName());
+        if (req.phone()!=null)   emp.setPhone(req.phone());
+        if (req.address()!=null) emp.setAddress(req.address());
+        if (req.emergency()!=null){
+            var e = new Employee.Emergency();
+            e.setName(req.emergency().name());
+            e.setPhone(req.emergency().phone());
+            e.setRelation(req.emergency().relation());
+            emp.setEmergencyContact(e);
+        }
+        employees.save(emp);
+        return Map.of("message","updated");
+    }
+
+    @Operation(summary = "Cập nhật thông tin công việc (Job tab)")
+    @PutMapping("/{id}/job")
+    public Map<String,Object> updateJob(
+            @PathVariable String id,
+            @RequestBody @Valid UpdateJobReq req,
+            Authentication auth
+    ){
+        ensureCanEdit(auth, id);
+        var emp = employees.findById(id).orElseThrow(() ->
+                new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
+
+        if (req.department()!=null) emp.setDepartment(req.department());
+        if (req.position()!=null)   emp.setPosition(req.position());
+        if (req.status()!=null)     emp.setStatus(req.status());
+        if (req.joinDate()!=null)   emp.setJoinDate(req.joinDate());
+        // grade / contractType: set nếu entity có
+
+        employees.save(emp);
+        return Map.of("message","updated");
+    }
+
     /* ===================== Helpers ===================== */
+
+    private void ensureCanEdit(Authentication auth, String employeeId){
+        var me = (User) auth.getPrincipal();
+        if (me.getRole() == User.Role.EMPLOYEE && !employeeId.equals(me.getEmployeeId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
+        }
+    }
 
     private static boolean containsIgnoreCase(String s, String needleLower) {
         return s != null && s.toLowerCase().contains(needleLower);

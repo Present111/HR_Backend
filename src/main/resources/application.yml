@@ -1,5 +1,9 @@
 server:
   port: 8080
+  tomcat:
+    # tránh giới hạn mặc định của Tomcat khi post multipart lớn
+    max-http-form-post-size: -1
+    max-swallow-size: -1
 
 spring:
   data:
@@ -8,7 +12,12 @@ spring:
   jackson:
     serialization:
       WRITE_DATES_AS_TIMESTAMPS: false
-
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB       # mỗi file tối đa
+      max-request-size: 200MB   # tổng 1 request
+      file-size-threshold: 2MB  # (tuỳ chọn) ghi ra disk khi vượt ngưỡng
 hrm:
   jwt:
     secret: 3e8112cd9aa0a41cebc48ab04db1d9f926eb454694ed755957b8510aae5032bf
