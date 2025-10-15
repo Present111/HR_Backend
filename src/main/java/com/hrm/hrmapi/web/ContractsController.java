@@ -79,14 +79,14 @@ public class ContractsController {
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     content = @Content(schema = @Schema(implementation = CreateContractRequest.class),
                             examples = @ExampleObject(value = """
-                                {
-                                  "type": "LABOR",
-                                  "startDate": "2024-09-01",
-                                  "endDate": "2025-08-31",
-                                  "status": "ACTIVE",
-                                  "baseSalary": 18000000
-                                }
-                            """))
+                {
+                  "type": "LABOR",
+                  "startDate": "2024-09-01",
+                  "endDate": "2025-08-31",
+                  "status": "ACTIVE",
+                  "baseSalary": 18000000
+                }
+            """))
             )
     )
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
@@ -96,21 +96,23 @@ public class ContractsController {
         Employee emp = employees.findById(employeeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Employee not found"));
 
-        // tính version tiếp theo
         var all = contracts.findByEmployeeIdOrderByVersionDesc(employeeId);
         int nextVersion = all.stream().map(Contract::getVersion).max(Comparator.naturalOrder()).orElse(0) + 1;
 
-        // Nếu tạo ACTIVE và có HĐ ACTIVE cũ -> expire HĐ cũ (policy đơn giản)
+        // SỬA: expire tất cả HĐ ACTIVE cũ
         if ("ACTIVE".equalsIgnoreCase(nz(body.status(), "ACTIVE"))) {
-            all.stream()
-                    .filter(c -> "ACTIVE".equalsIgnoreCase(nz(c.getStatus())))
-                    .findFirst()
-                    .ifPresent(c -> {
-                        if (body.startDate() != null && c.getStartDate() != null && body.startDate().isAfter(c.getStartDate())) {
-                            c.setStatus("EXPIRED");
-                            contracts.save(c);
+            for (var old : all) {
+                if ("ACTIVE".equalsIgnoreCase(nz(old.getStatus(), ""))) {
+                    if (body.startDate() != null) {
+                        var cutOff = body.startDate().minusDays(1);
+                        if (old.getEndDate() == null || old.getEndDate().isAfter(cutOff)) {
+                            old.setEndDate(cutOff);
                         }
-                    });
+                    }
+                    old.setStatus("EXPIRED");
+                    contracts.save(old);
+                }
+            }
         }
 
         var c = Contract.builder()
@@ -125,6 +127,10 @@ public class ContractsController {
 
         return contracts.save(c);
     }
+
+    // helper
+    private static String nz(String s, String def) { return s == null ? def : s; }
+
 
     /* ===================== UPDATE ===================== */
 
@@ -164,7 +170,5 @@ public class ContractsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden");
         }
     }
-
-    private static String nz(String s, String def) { return (s == null || s.isBlank()) ? def : s; }
     private static String nz(String s) { return s == null ? "" : s; }
 }

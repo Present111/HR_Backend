@@ -11,4 +11,7 @@ public interface LeaveRequestRepo extends MongoRepository<LeaveRequest, String> 
             String employeeId, LocalDate to, LocalDate from);
     List<LeaveRequest> findByStatus(String status);
     List<LeaveRequest> findByStartDateBetween(LocalDate from, LocalDate to);
+    List<LeaveRequest> findByEmployeeIdAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+            String employeeId, String status, LocalDate end, LocalDate start
+    );
 }

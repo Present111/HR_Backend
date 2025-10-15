@@ -1,6 +1,7 @@
 // src/main/java/com/hrm/hrmapi/security/SecurityConfig.java
 package com.hrm.hrmapi.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,7 +18,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 
 @Configuration
@@ -37,9 +37,25 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Chỉ duy nhất login là public
+                        // Swagger + root (nếu có redirect tới Swagger)
+                        .requestMatchers(
+                                "/",                     // optional: nếu bạn có RootController redirect
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+
+                        // Public auth endpoints (để bạn test swagger/forgot/reset nếu cần)
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                        // Tất cả API khác bắt buộc JWT
+                        .requestMatchers(HttpMethod.POST, "/auth/forgot", "/auth/reset-password").permitAll()
+
+                        // Static uploads (nếu FE cần tải ảnh avatar,…)
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+
+                        // Preflight CORS
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Các API còn lại bắt buộc JWT
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
@@ -59,11 +75,10 @@ public class SecurityConfig {
                 "http://localhost:3000",
                 "http://localhost:5000"
         ));
-        cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization","Content-Type"));
-        // Dùng Bearer token, không dùng cookie
-        cfg.setAllowCredentials(false);
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        cfg.setAllowCredentials(false); // dùng Bearer, không dùng cookie
         cfg.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

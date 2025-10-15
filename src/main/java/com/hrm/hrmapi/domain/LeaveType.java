@@ -16,4 +16,5 @@ public class LeaveType {
     private String code;
     private String name;
     private boolean deductQuota;
+
 }
